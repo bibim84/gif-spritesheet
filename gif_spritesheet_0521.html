@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GIF → Sprite Sheet Generator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; min-height: 100vh; padding: 32px 24px; color: #111; }
+  h1 { font-size: 22px; font-weight: 700; }
+  .sub { color: #888; font-size: 13px; margin-top: 6px; margin-bottom: 28px; }
+  .card { background: #fff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 24px; margin-bottom: 20px; }
+  .label { font-size: 11px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .drop-zone {
+    border: 2px dashed #d0d5dd; border-radius: 12px; padding: 40px 24px;
+    text-align: center; cursor: pointer; background: #fff; transition: all 0.15s; margin-bottom: 20px;
+  }
+  .drop-zone.drag { border-color: #4f8ef7; background: #eef4ff; }
+  .drop-zone .icon { font-size: 36px; margin-bottom: 8px; }
+  .drop-zone .main-text { font-weight: 600; color: #333; }
+  .drop-zone .sub-text { color: #aaa; font-size: 12px; margin-top: 4px; }
+  .drop-zone .file-name { font-weight: 600; color: #111; }
+  .drop-zone .file-info { color: #888; font-size: 12px; margin-top: 4px; }
+  .error { color: #e53e3e; font-size: 13px; padding: 10px 14px; background: #fff5f5; border-radius: 8px; margin-bottom: 16px; }
+  .mode-bar { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .mode-bar span { font-size: 13px; font-weight: 600; color: #555; white-space: nowrap; }
+  .mode-bar label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; color: #666; }
+  .mode-bar label.active { color: #111; font-weight: 600; }
+  .mode-bar input[type=radio] { accent-color: #4f8ef7; width: 15px; height: 15px; }
+  .spacer { flex: 1; }
+  .btn { padding: 9px 22px; background: #111; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn:disabled { background: #ccc; cursor: not-allowed; }
+  .btn.blue { background: #4f8ef7; }
+  .btn.gray { background: #f0f0f0; color: #555; }
+  .btn.full { width: 100%; padding: 12px; font-size: 14px; }
+  .info-box { background: #f0f4ff; border-radius: 10px; padding: 12px 16px; font-size: 12px; color: #555; margin-bottom: 20px; }
+  .info-box strong { color: #4f8ef7; }
+  .range-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .range-tag { background: #fff; border: 1px solid #c7d7fd; border-radius: 6px; padding: 3px 10px; color: #3a5ccc; font-weight: 500; font-size: 12px; }
+  .settings-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .checker { background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 16px 16px; border-radius: 8px; padding: 8px; display: inline-block; }
+  .preview-img { max-width: 110px; max-height: 110px; display: block; image-rendering: pixelated; }
+  .scale-info { font-size: 13px; color: #555; display: block; margin-bottom: 6px; }
+  input[type=range] { width: 100%; accent-color: #4f8ef7; }
+  .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #bbb; }
+  .stat-box { font-size: 12px; color: #888; background: #f8f9fa; border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
+  .stat-box div { margin-bottom: 2px; }
+  .warn { color: #e67e22; margin-top: 4px; }
+  .result-meta { font-size: 12px; color: #888; display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .result-meta strong { color: #111; }
+  .sheet-preview { overflow-x: auto; margin-bottom: 16px; border-radius: 8px; background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 20px 20px; padding: 8px; }
+  .sheet-preview img { max-width: 100%; display: block; }
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: #fff; border-radius: 16px; padding: 32px; width: 440px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .modal p { font-size: 13px; color: #888; margin-bottom: 20px; }
+  .modal label { font-size: 12px; color: #555; font-weight: 600; display: block; margin-bottom: 6px; }
+  .modal input[type=text] { width: 100%; padding: 10px 12px; border: 1px solid #d0d5dd; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 14px; }
+  .modal input[type=text]:focus { border-color: #4f8ef7; }
+  .file-list { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; margin-bottom: 20px; font-size: 12px; color: #666; }
+  .file-list .title { font-weight: 600; margin-bottom: 6px; color: #444; }
+  .file-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .file-tag { background: #fff; border: 1px solid #e0e0e0; border-radius: 5px; padding: 2px 8px; color: #333; }
+  .file-tag span { color: #aaa; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns .btn { flex: 1; padding: 11px; }
+  .progress { font-size: 13px; color: #4f8ef7; margin-top: 10px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div style="max-width:700px;margin:0 auto;">
+  <h1>GIF → Sprite Sheet</h1>
+  <p class="sub">원본 색상 · 투명 배경 유지 · 16,384px 초과 시 2줄 자동 배치</p>
+
+  <!-- Upload -->
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".gif" style="display:none" />
+    <div class="icon">🎞️</div>
+    <div id="dropText">
+      <div class="main-text">GIF 파일을 드래그하거나 클릭하여 업로드</div>
+      <div class="sub-text">GIF 파일만 지원됩니다</div>
+    </div>
+  </div>
+
+  <div class="error" id="errorBox" style="display:none"></div>
+
+  <!-- Mode + Extract -->
+  <div class="card">
+    <div class="mode-bar">
+      <span>추출 모드</span>
+      <label id="lbl-normal" class="active"><input type="radio" name="mode" value="normal" checked /> 일반</label>
+      <label id="lbl-144"><input type="radio" name="mode" value="144" /> 144프레임</label>
+      <label id="lbl-296"><input type="radio" name="mode" value="296" /> 296프레임</label>
+      <div class="spacer"></div>
+      <button class="btn" id="extractBtn" disabled>추출하기</button>
+    </div>
+  </div>
+
+  <!-- Mode info -->
+  <div class="info-box" id="modeInfo" style="display:none"></div>
+
+  <!-- Settings -->
+  <div class="card" id="settingsCard" style="display:none">
+    <div class="settings-row">
+      <div>
+        <div class="label">미리보기</div>
+        <div class="checker"><img id="previewImg" class="preview-img" /></div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div class="label">스케일</div>
+        <span class="scale-info" id="scaleLabel">1× → 0×0px/프레임</span>
+        <input type="range" id="scaleRange" min="0.25" max="4" step="0.25" value="1" />
+        <div class="range-labels"><span>0.25×</span><span>4×</span></div>
+        <div class="stat-box" id="statBox"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="card" id="resultCard" style="display:none">
+    <div class="label">결과</div>
+    <div class="result-meta" id="resultMeta"></div>
+    <div class="sheet-preview"><img id="resultImg" /></div>
+    <button class="btn blue full" id="downloadBtn">PNG 다운로드</button>
+  </div>
+</div>
+
+<!-- Save Modal -->
+<div class="modal-overlay" id="modalOverlay" style="display:none">
+  <div class="modal">
+    <h2>파일 저장</h2>
+    <p id="modalDesc"></p>
+    <label>파일명 (공통 접두사)</label>
+    <input type="text" id="saveNameInput" placeholder="예: character_idle" />
+    <div class="file-list">
+      <div class="title">저장될 파일 목록:</div>
+      <div class="file-tags" id="fileTagList"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn gray" id="cancelBtn">취소</button>
+      <button class="btn blue" id="confirmBtn">저장하기</button>
+    </div>
+    <div class="progress" id="progressText" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const SUFFIXES = ["01","02","03","f","c","b","d","e"];
+const RANGES_144 = [[1,10],[11,14],[15,24],[25,36],[37,66],[73,86],[91,108],[109,144]];
+const RANGES_296 = [[1,10],[11,26],[27,60],[61,84],[85,152],[159,184],[189,244],[245,296]];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let gifData = null;
+let composed = null;
+let currentFile = null;
+let scale = 1;
+let mode = "normal";
+let resultCanvas = null;
+
+// ── GIF Parser ─────────────────────────────────────────────────────────────
+function parseGIF(buffer) {
+  const data = new Uint8Array(buffer);
+  let pos = 0;
+  const rb = () => data[pos++];
+  const rw = () => { const w = data[pos] | (data[pos+1]<<8); pos+=2; return w; };
+  pos = 6;
+  const lw = rw(), lh = rw();
+  const packed = rb();
+  const gctFlag = (packed>>7)&1, gctSize = packed&0x07;
+  rb(); rb();
+  let gct = null;
+  if (gctFlag) { const n=1<<(gctSize+1); gct=new Uint8Array(data.buffer,pos,n*3); pos+=n*3; }
+  const frames = [];
+  let gce = { delay:100, transparentIndex:-1, disposal:0 };
+  while (pos < data.length) {
+    const block = rb();
+    if (block===0x3B) break;
+    if (block===0x21) {
+      const label = rb();
+      if (label===0xF9) {
+        rb();
+        const p = rb();
+        gce.disposal = (p>>3)&0x07;
+        gce.delay = (rw()*10)||100;
+        const ti = rb();
+        gce.transparentIndex = (p&1)?ti:-1;
+        rb();
+      } else { let s; while((s=rb())!==0) pos+=s; }
+    } else if (block===0x2C) {
+      const fx=rw(),fy=rw(),fw=rw(),fh=rw();
+      const ip=rb();
+      const lctFlag=(ip>>7)&1, interlace=(ip>>6)&1, lctSize=ip&0x07;
+      let ct=gct;
+      if (lctFlag) { const n=1<<(lctSize+1); ct=new Uint8Array(data.buffer,pos,n*3); pos+=n*3; }
+      const minCode=rb();
+      const chunks=[]; let size;
+      while((size=rb())!==0){ chunks.push(data.slice(pos,pos+size)); pos+=size; }
+      const compressed=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+      let off=0; for(const c of chunks){compressed.set(c,off);off+=c.length;}
+      const pixels=lzwDecode(minCode,compressed);
+      const rgba=new Uint8ClampedArray(fw*fh*4);
+      for(let i=0;i<pixels.length;i++){
+        const idx=pixels[i];
+        if(idx===gce.transparentIndex){rgba[i*4+3]=0;}
+        else if(ct){rgba[i*4]=ct[idx*3];rgba[i*4+1]=ct[idx*3+1];rgba[i*4+2]=ct[idx*3+2];rgba[i*4+3]=255;}
+      }
+      frames.push({x:fx,y:fy,w:fw,h:fh,rgba:interlace?deinterlace(rgba,fw,fh):rgba,delay:gce.delay,disposal:gce.disposal,transparentIndex:gce.transparentIndex});
+      gce={delay:100,transparentIndex:-1,disposal:0};
+    }
+  }
+  return {w:lw,h:lh,frames};
+}
+
+function deinterlace(rgba,w,h){
+  const out=new Uint8ClampedArray(rgba.length);
+  const passes=[{start:0,step:8},{start:4,step:8},{start:2,step:4},{start:1,step:2}];
+  let src=0;
+  for(const p of passes) for(let y=p.start;y<h;y+=p.step) for(let x=0;x<w;x++){
+    const dst=(y*w+x)*4;
+    out[dst]=rgba[src*4];out[dst+1]=rgba[src*4+1];out[dst+2]=rgba[src*4+2];out[dst+3]=rgba[src*4+3];src++;
+  }
+  return out;
+}
+
+function lzwDecode(minCode,data){
+  const clearCode=1<<minCode,eofCode=clearCode+1;
+  let codeSize=minCode+1,codeMask=(1<<codeSize)-1;
+  const table=[];
+  const initTable=()=>{table.length=0;for(let i=0;i<clearCode;i++)table.push([i]);table.push([]);table.push([]);};
+  initTable();
+  const output=[];
+  let bitBuf=0,bitCount=0,dataPos=0;
+  const readCode=()=>{
+    while(bitCount<codeSize&&dataPos<data.length){bitBuf|=data[dataPos++]<<bitCount;bitCount+=8;}
+    const code=bitBuf&codeMask;bitBuf>>=codeSize;bitCount-=codeSize;return code;
+  };
+  let prev=null;
+  while(true){
+    const code=readCode();
+    if(code===eofCode)break;
+    if(code===clearCode){initTable();codeSize=minCode+1;codeMask=(1<<codeSize)-1;prev=null;continue;}
+    let entry;
+    if(code<table.length)entry=table[code];
+    else if(prev!==null&&code===table.length)entry=[...prev,prev[0]];
+    else break;
+    for(const p of entry)output.push(p);
+    if(prev!==null){
+      table.push([...prev,entry[0]]);
+      if(table.length===(1<<codeSize)+1&&codeSize<12){codeSize++;codeMask=(1<<codeSize)-1;}
+    }
+    prev=entry;
+  }
+  return output;
+}
+
+// ── Frame Composition ──────────────────────────────────────────────────────
+function composeFrames(gd){
+  const {w,h,frames}=gd;
+  const result=[];
+  let prev=null;
+  for(const f of frames){
+    const c=document.createElement("canvas"); c.width=w; c.height=h;
+    const ctx=c.getContext("2d",{willReadFrequently:true});
+    if(prev&&f.disposal!==2) ctx.putImageData(prev,0,0);
+    const fc=document.createElement("canvas"); fc.width=f.w; fc.height=f.h;
+    fc.getContext("2d").putImageData(new ImageData(f.rgba,f.w,f.h),0,0);
+    ctx.drawImage(fc,f.x,f.y);
+    const id=ctx.getImageData(0,0,w,h);
+    result.push(id);
+    prev=f.disposal===2?null:id;
+  }
+  return result;
+}
+
+function drawScaled(ctx,imgData,sw,sh,dx,dy,dw,dh){
+  const t=document.createElement("canvas"); t.width=sw; t.height=sh;
+  t.getContext("2d").putImageData(imgData,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(t,dx,dy,dw,dh);
+}
+
+// ── Sprite Sheet ───────────────────────────────────────────────────────────
+function buildSheet(frames, gw, gh, sc){
+  const fw=Math.round(gw*sc), fh=Math.round(gh*sc);
+  const total=frames.length;
+  const singleW=fw*total;
+  const canvas=document.createElement("canvas");
+  const ctx=canvas.getContext("2d");
+  if(singleW>16384){
+    const top=Math.ceil(total/2);
+    canvas.width=fw*top; canvas.height=fh*2;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let i=0;i<total;i++){
+      const row=i<top?0:1, col=i<top?i:i-top;
+      drawScaled(ctx,frames[i],gw,gh,col*fw,row*fh,fw,fh);
+    }
+  } else {
+    canvas.width=fw*total; canvas.height=fh;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(let i=0;i<total;i++) drawScaled(ctx,frames[i],gw,gh,i*fw,0,fw,fh);
+  }
+  return canvas;
+}
+
+function buildRangeSheet(start,end){
+  const slice=composed.slice(start-1,end);
+  if(!slice.length) return null;
+  return buildSheet(slice,gifData.w,gifData.h,scale);
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+function downloadCanvas(canvas,filename){
+  return new Promise(res=>{
+    canvas.toBlob(blob=>{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download=filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>{URL.revokeObjectURL(a.href);res();},300);
+    },"image/png");
+  });
+}
+
+// ── UI Helpers ─────────────────────────────────────────────────────────────
+function showError(msg){ const b=document.getElementById("errorBox"); b.textContent=msg; b.style.display=msg?"block":"none"; }
+function setExtractEnabled(v){ document.getElementById("extractBtn").disabled=!v; }
+
+function updateModeInfo(){
+  const info=document.getElementById("modeInfo");
+  const ranges=mode==="144"?RANGES_144:mode==="296"?RANGES_296:null;
+  if(!ranges){info.style.display="none";return;}
+  const tags=ranges.map((r,i)=>`<span class="range-tag">${SUFFIXES[i]} : ${r[0]}~${r[1]}</span>`).join("");
+  info.innerHTML=`<strong>${mode}프레임 모드</strong> — 아래 구간별로 분할 저장됩니다<div class="range-tags">${tags}</div>`;
+  info.style.display="block";
+}
+
+function updateStats(){
+  if(!gifData)return;
+  const fw=Math.round(gifData.w*scale), fh=Math.round(gifData.h*scale);
+  document.getElementById("scaleLabel").textContent=`${scale}× → ${fw}×${fh}px/프레임`;
+  const totalW=fw*gifData.frames.length;
+  const warn=totalW>16384?`<div class="warn">⚠️ 16,384px 초과 → 2줄 자동 배치 (위 ${Math.ceil(gifData.frames.length/2)} / 아래 ${Math.floor(gifData.frames.length/2)}프레임)</div>`:"";
+  document.getElementById("statBox").innerHTML=`
+    <div>총 프레임: <strong>${gifData.frames.length}</strong></div>
+    ${mode==="normal"?`<div>예상 시트 너비: <strong style="color:${totalW>16384?"#e67e22":"#111"}">${totalW.toLocaleString()}px</strong></div>${warn}`:""}
+  `;
+}
+
+function updateFileTagList(name){
+  const ranges=mode==="144"?RANGES_144:RANGES_296;
+  document.getElementById("fileTagList").innerHTML=ranges.map((r,i)=>
+    `<span class="file-tag">${name||"파일명"}_${SUFFIXES[i]}.png <span>(${r[0]}~${r[1]})</span></span>`
+  ).join("");
+}
+
+// ── File Load ──────────────────────────────────────────────────────────────
+function loadFile(file){
+  if(!file||!file.name.toLowerCase().endsWith(".gif")){showError("GIF 파일만 업로드할 수 있습니다.");return;}
+  showError("");
+  currentFile=file;
+  gifData=null; composed=null; resultCanvas=null;
+  document.getElementById("resultCard").style.display="none";
+  document.getElementById("dropText").innerHTML=`<div class="file-name">${file.name}</div><div class="file-info">파싱 중...</div>`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const parsed=parseGIF(e.target.result);
+      if(!parsed.frames.length)throw new Error("프레임을 찾을 수 없습니다.");
+      gifData=parsed;
+      composed=composeFrames(parsed);
+      document.getElementById("dropText").innerHTML=`<div class="file-name">${file.name}</div><div class="file-info">${parsed.frames.length}프레임 · ${parsed.w}×${parsed.h}px</div>`;
+      const img=document.getElementById("previewImg");
+      img.src=URL.createObjectURL(file);
+      document.getElementById("settingsCard").style.display="block";
+      updateStats();
+      setExtractEnabled(true);
+    }catch(err){showError("GIF 파싱 실패: "+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Extract ────────────────────────────────────────────────────────────────
+function handleExtract(){
+  if(!gifData||!composed)return;
+  showError("");
+  if(mode==="normal"){
+    document.getElementById("extractBtn").textContent="처리 중...";
+    setExtractEnabled(false);
+    setTimeout(()=>{
+      try{
+        const allFrames=composed;
+        const canvas=buildSheet(allFrames,gifData.w,gifData.h,scale);
+        resultCanvas=canvas;
+        const fw=Math.round(gifData.w*scale);
+        const rows=canvas.height>Math.round(gifData.h*scale)?2:1;
+        const top=Math.ceil(gifData.frames.length/2);
+        document.getElementById("resultMeta").innerHTML=`
+          <span>크기: <strong>${canvas.width}×${canvas.height}px</strong></span>
+          <span>줄 수: <strong>${rows}줄</strong></span>
+          ${rows===2?`<span>위 ${top} / 아래 ${gifData.frames.length-top}프레임</span>`:""}
+          <span>총 ${gifData.frames.length}프레임</span>
+        `;
+        document.getElementById("resultImg").src=canvas.toDataURL("image/png");
+        document.getElementById("resultImg").style.imageRendering=fw<32?"pixelated":"auto";
+        document.getElementById("resultCard").style.display="block";
+      }catch(err){showError("생성 실패: "+err.message);}
+      finally{document.getElementById("extractBtn").textContent="추출하기";setExtractEnabled(true);}
+    },50);
+  } else {
+    const baseName=currentFile?.name.replace(".gif","")||"sprite";
+    document.getElementById("saveNameInput").value=baseName;
+    document.getElementById("modalDesc").textContent=`${mode}프레임 모드 — ${SUFFIXES.length}개 PNG가 순서대로 저장됩니다.`;
+    updateFileTagList(baseName);
+    document.getElementById("modalOverlay").style.display="flex";
+    document.getElementById("progressText").style.display="none";
+    document.getElementById("confirmBtn").disabled=false;
+  }
+}
+
+// ── Modal Save ─────────────────────────────────────────────────────────────
+async function handleSaveConfirm(){
+  const name=document.getElementById("saveNameInput").value.trim();
+  if(!name)return;
+  const ranges=mode==="144"?RANGES_144:RANGES_296;
+  document.getElementById("confirmBtn").disabled=true;
+  document.getElementById("progressText").style.display="block";
+  try{
+    for(let i=0;i<ranges.length;i++){
+      document.getElementById("progressText").textContent=`저장 중... (${i+1}/${ranges.length}) ${name}_${SUFFIXES[i]}.png`;
+      const canvas=buildRangeSheet(ranges[i][0],ranges[i][1]);
+      if(!canvas)continue;
+      await downloadCanvas(canvas,`${name}_${SUFFIXES[i]}.png`);
+    }
+    document.getElementById("progressText").textContent="✅ 저장 완료!";
+    setTimeout(()=>document.getElementById("modalOverlay").style.display="none",1000);
+  }catch(err){
+    showError("저장 실패: "+err.message);
+    document.getElementById("modalOverlay").style.display="none";
+  }finally{document.getElementById("confirmBtn").disabled=false;}
+}
+
+// ── Event Listeners ────────────────────────────────────────────────────────
+const dropZone=document.getElementById("dropZone");
+dropZone.addEventListener("click",()=>document.getElementById("fileInput").click());
+dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.classList.add("drag");});
+dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("drag"));
+dropZone.addEventListener("drop",e=>{e.preventDefault();dropZone.classList.remove("drag");loadFile(e.dataTransfer.files[0]);});
+document.getElementById("fileInput").addEventListener("change",e=>loadFile(e.target.files[0]));
+
+document.querySelectorAll("input[name=mode]").forEach(r=>{
+  r.addEventListener("change",()=>{
+    mode=r.value;
+    document.querySelectorAll(".mode-bar label").forEach(l=>l.classList.remove("active"));
+    document.getElementById("lbl-"+mode).classList.add("active");
+    updateModeInfo();
+    updateStats();
+    document.getElementById("resultCard").style.display="none";
+  });
+});
+
+document.getElementById("scaleRange").addEventListener("input",e=>{
+  scale=Number(e.target.value);
+  updateStats();
+});
+
+document.getElementById("extractBtn").addEventListener("click",handleExtract);
+
+document.getElementById("downloadBtn").addEventListener("click",()=>{
+  if(!resultCanvas)return;
+  downloadCanvas(resultCanvas,(currentFile?.name.replace(".gif","")||"sprite")+"_sheet.png");
+});
+
+document.getElementById("cancelBtn").addEventListener("click",()=>{
+  document.getElementById("modalOverlay").style.display="none";
+});
+
+document.getElementById("saveNameInput").addEventListener("input",e=>{
+  updateFileTagList(e.target.value.trim());
+});
+
+document.getElementById("saveNameInput").addEventListener("keydown",e=>{
+  if(e.key==="Enter") handleSaveConfirm();
+});
+
+document.getElementById("confirmBtn").addEventListener("click",handleSaveConfirm);
+</script>
+</body>
+</html>
