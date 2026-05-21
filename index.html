@@ -29,7 +29,7 @@ h1{font-size:22px;font-weight:700;}
 .info-box strong{color:#4f8ef7;}
 .range-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .range-tag{background:#fff;border:1px solid #c7d7fd;border-radius:6px;padding:3px 10px;color:#3a5ccc;font-weight:500;font-size:12px;}
-.stat-box{font-size:12px;color:#888;background:#f8f9fa;border-radius:8px;padding:10px 12px;margin-top:0;line-height:1.9;}
+.stat-box{font-size:12px;color:#888;background:#f8f9fa;border-radius:8px;padding:10px 12px;line-height:1.9;}
 .warn{color:#e67e22;}
 .result-meta{font-size:12px;color:#888;display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;}
 .result-meta strong{color:#111;}
@@ -123,227 +123,78 @@ h1{font-size:22px;font-weight:700;}
   </div>
 </div>
 
+<!-- omggif: 검증된 GIF 파서 라이브러리 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/omggif/1.0.10/omggif.min.js"></script>
 <script>
 const SUFFIXES   = ["01","02","03","f","c","b","d","e"];
 const RANGES_144 = [[1,10],[11,14],[15,24],[25,36],[37,66],[73,86],[91,108],[109,144]];
 const RANGES_296 = [[1,10],[11,26],[27,60],[61,84],[85,152],[159,184],[189,244],[245,296]];
 const MAX_W = 16384;
 
-let gifW=0, gifH=0;
-let composedFrames = []; // 각 프레임: Uint8Array (RGBA, gifW*gifH*4)
+let gifW = 0, gifH = 0;
+let composedFrames = []; // Uint8ClampedArray[] 각 프레임 RGBA
 let currentFile = null;
 let mode = "normal";
 let resultCanvas = null;
 
-// =====================================================================
-// LZW 디코더
-// =====================================================================
-function lzwDecode(minCode, data) {
-  const cc = 1 << minCode, eof = cc + 1;
-  let codeSize = minCode + 1, mask = (1 << codeSize) - 1;
-  const table = [];
-  const init = () => {
-    table.length = 0;
-    for (let i = 0; i < cc; i++) table.push(new Uint8Array([i]));
-    table.push(null); table.push(null);
-  };
-  init();
-  const out = [];
-  let buf = 0, bits = 0, dp = 0, prev = null;
-  const read = () => {
-    while (bits < codeSize && dp < data.length) { buf |= data[dp++] << bits; bits += 8; }
-    const c = buf & mask; buf >>= codeSize; bits -= codeSize; return c;
-  };
-  while (true) {
-    const code = read();
-    if (code === eof) break;
-    if (code === cc) { init(); codeSize = minCode + 1; mask = (1 << codeSize) - 1; prev = null; continue; }
-    let entry;
-    if (code < table.length && table[code]) entry = table[code];
-    else if (prev && code === table.length) entry = new Uint8Array([...prev, prev[0]]);
-    else break;
-    for (const p of entry) out.push(p);
-    if (prev) {
-      const ne = new Uint8Array([...prev, entry[0]]);
-      table.push(ne);
-      if (table.length === (1 << codeSize) + 1 && codeSize < 12) { codeSize++; mask = (1 << codeSize) - 1; }
-    }
-    prev = entry;
-  }
-  return new Uint8Array(out);
-}
-
-// =====================================================================
-// 인터레이스 해제
-// =====================================================================
-function deinterlace(src, w, h) {
-  const out = new Uint8Array(src.length);
-  const passes = [{s:0,st:8},{s:4,st:8},{s:2,st:4},{s:1,st:2}];
-  let si = 0;
-  for (const p of passes)
-    for (let y = p.s; y < h; y += p.st)
-      for (let x = 0; x < w; x++) {
-        const di = (y * w + x) * 4;
-        out[di]=src[si]; out[di+1]=src[si+1]; out[di+2]=src[si+2]; out[di+3]=src[si+3];
-        si += 4;
-      }
-  return out;
-}
-
-// =====================================================================
-// GIF 파서 + 프레임 합성
-// 결과: composedFrames[] — 각각 gifW*gifH*4 크기의 Uint8Array (RGBA)
-// canvas/drawImage 미사용, 순수 픽셀 버퍼 연산만 사용
-// =====================================================================
+// ── omggif로 GIF 파싱 + 프레임 합성 ──────────────────────────────────────
 function parseGIF(buffer) {
-  const d = new Uint8Array(buffer);
-  let p = 0;
-  const rb = () => d[p++];
-  const rw = () => { const v = d[p] | (d[p+1] << 8); p += 2; return v; };
+  const gr = new GifReader(new Uint8Array(buffer));
+  gifW = gr.width;
+  gifH = gr.height;
+  const n = gr.numFrames();
+  composedFrames = [];
 
-  // — 헤더 —
-  p = 6;
-  const lw = rw(), lh = rw();
-  const pk = rb();
-  const gctFlag = (pk >> 7) & 1, gctSize = pk & 7;
-  const bgIdx = rb(); rb(); // bg color index, pixel aspect
+  // 누적 버퍼 (이전 프레임 상태)
+  let prevBuf = new Uint8ClampedArray(gifW * gifH * 4); // 투명으로 시작
+  let savedBuf = null;
 
-  let gct = null;
-  if (gctFlag) {
-    const n = 1 << (gctSize + 1);
-    gct = d.slice(p, p + n * 3);
-    p += n * 3;
-  }
+  for (let i = 0; i < n; i++) {
+    const info = gr.frameInfo(i);
+    const frameBuf = new Uint8ClampedArray(gifW * gifH * 4);
 
-  gifW = lw; gifH = lh;
+    // omggif의 decodeAndBlitFrameRGBA: 해당 프레임 픽셀을 frameBuf에 씀
+    // 투명 픽셀은 alpha=0으로 표시됨
+    gr.decodeAndBlitFrameRGBA(i, frameBuf);
 
-  // 배경 버퍼: GIF background color index로 채움
-  // (투명 인덱스 지정 없으면 배경색, 있으면 투명)
-  const makeBgBuf = (ct, bgI, tiIdx) => {
-    const buf = new Uint8Array(lw * lh * 4);
-    if (ct && bgI >= 0 && bgI !== tiIdx) {
-      const r = ct[bgI*3], g = ct[bgI*3+1], b = ct[bgI*3+2];
-      for (let i = 0; i < lw * lh; i++) {
-        buf[i*4]=r; buf[i*4+1]=g; buf[i*4+2]=b; buf[i*4+3]=255;
-      }
-    }
-    // tiIdx와 같으면 투명(모두 0) — 이미 초기값이 0
-    return buf;
-  };
+    // disposal=3 대비 이전 상태 저장
+    if (info.disposal === 3) savedBuf = prevBuf.slice();
 
-  const result = [];
-  let gce = { disposal: 0, ti: -1, delay: 100 };
-
-  // 현재 누적 버퍼 (이전 프레임 상태 유지용)
-  let curBuf = new Uint8Array(lw * lh * 4); // 완전 투명으로 시작
-  let savedBuf = null; // disposal=3 복원용
-
-  while (p < d.length) {
-    const block = rb();
-    if (block === 0x3B) break;
-
-    if (block === 0x21) {
-      const lbl = rb();
-      if (lbl === 0xF9) {
-        rb(); // block size = 4
-        const pk2 = rb();
-        gce.disposal = (pk2 >> 3) & 7;
-        gce.delay = (rw() * 10) || 100;
-        const ti = rb();
-        gce.ti = (pk2 & 1) ? ti : -1;
-        rb(); // terminator
+    // 합성: prevBuf 위에 frameBuf를 올림
+    // alpha=0인 픽셀(투명)은 prevBuf 값 유지
+    const cur = new Uint8ClampedArray(gifW * gifH * 4);
+    for (let p = 0; p < gifW * gifH * 4; p += 4) {
+      if (frameBuf[p+3] === 0) {
+        // 투명 → 이전 프레임 유지
+        cur[p]   = prevBuf[p];
+        cur[p+1] = prevBuf[p+1];
+        cur[p+2] = prevBuf[p+2];
+        cur[p+3] = prevBuf[p+3];
       } else {
-        let s; while ((s = rb()) !== 0) p += s;
+        cur[p]   = frameBuf[p];
+        cur[p+1] = frameBuf[p+1];
+        cur[p+2] = frameBuf[p+2];
+        cur[p+3] = frameBuf[p+3];
       }
-    } else if (block === 0x2C) {
-      const fx = rw(), fy = rw(), fw = rw(), fh = rw();
-      const ip = rb();
-      const lctFlag = (ip >> 7) & 1, interlace = (ip >> 6) & 1, lctSize = ip & 7;
-      let ct = gct;
-      if (lctFlag) {
-        const n = 1 << (lctSize + 1);
-        ct = d.slice(p, p + n * 3);
-        p += n * 3;
-      }
+    }
 
-      const minCode = rb();
-      const chunks = []; let s;
-      while ((s = rb()) !== 0) { chunks.push(d.slice(p, p + s)); p += s; }
-      const comp = new Uint8Array(chunks.reduce((a, c) => a + c.length, 0));
-      let off = 0; for (const c of chunks) { comp.set(c, off); off += c.length; }
+    composedFrames.push(cur);
 
-      const pixels = lzwDecode(minCode, comp);
-
-      // 팔레트 → RGBA 패치 (색상 테이블에서 직접 읽기)
-      const patch = new Uint8Array(fw * fh * 4);
-      for (let i = 0; i < pixels.length; i++) {
-        const idx = pixels[i];
-        if (idx === gce.ti) {
-          // 투명 — alpha 0, 나머지 0
-          patch[i*4]=0; patch[i*4+1]=0; patch[i*4+2]=0; patch[i*4+3]=0;
-        } else if (ct) {
-          patch[i*4]   = ct[idx*3];
-          patch[i*4+1] = ct[idx*3+1];
-          patch[i*4+2] = ct[idx*3+2];
-          patch[i*4+3] = 255;
-        }
-      }
-
-      const patchFinal = interlace ? deinterlace(patch, fw, fh) : patch;
-
-      // disposal=3: 이 프레임 합성 전 상태 저장
-      if (gce.disposal === 3) savedBuf = curBuf.slice();
-
-      // 패치를 curBuf에 합성
-      // 투명 픽셀(alpha=0)은 curBuf를 그대로 유지
-      for (let row = 0; row < fh; row++) {
-        for (let col = 0; col < fw; col++) {
-          const si = (row * fw + col) * 4;
-          const di = ((fy + row) * lw + (fx + col)) * 4;
-          if (di < 0 || di + 3 >= curBuf.length) continue;
-          if (patchFinal[si + 3] === 0) continue; // 투명 픽셀 스킵
-          curBuf[di]   = patchFinal[si];
-          curBuf[di+1] = patchFinal[si+1];
-          curBuf[di+2] = patchFinal[si+2];
-          curBuf[di+3] = patchFinal[si+3];
-        }
-      }
-
-      // 현재 프레임 스냅샷 저장
-      result.push(curBuf.slice());
-
-      // disposal 처리
-      if (gce.disposal === 2) {
-        // 패치 영역을 배경색으로 복원
-        // 배경색: gct와 bgIdx로 결정, ti와 같으면 투명
-        const bgR = (gct && bgIdx !== gce.ti) ? gct[bgIdx*3]   : 0;
-        const bgG = (gct && bgIdx !== gce.ti) ? gct[bgIdx*3+1] : 0;
-        const bgB = (gct && bgIdx !== gce.ti) ? gct[bgIdx*3+2] : 0;
-        const bgA = (gct && bgIdx !== gce.ti) ? 255 : 0;
-        for (let row = 0; row < fh; row++) {
-          for (let col = 0; col < fw; col++) {
-            const di = ((fy + row) * lw + (fx + col)) * 4;
-            if (di < 0 || di + 3 >= curBuf.length) continue;
-            curBuf[di]=bgR; curBuf[di+1]=bgG; curBuf[di+2]=bgB; curBuf[di+3]=bgA;
-          }
-        }
-      } else if (gce.disposal === 3 && savedBuf) {
-        curBuf = savedBuf;
-        savedBuf = null;
-      }
-      // disposal 0,1: curBuf 그대로 유지
-
-      gce = { disposal: 0, ti: -1, delay: 100 };
+    // disposal 처리
+    if (info.disposal === 2) {
+      // 배경으로 복원 (투명)
+      prevBuf = new Uint8ClampedArray(gifW * gifH * 4);
+    } else if (info.disposal === 3 && savedBuf) {
+      prevBuf = savedBuf;
+      savedBuf = null;
+    } else {
+      // 0, 1: 현재 상태 유지
+      prevBuf = cur;
     }
   }
-
-  composedFrames = result;
 }
 
-// =====================================================================
-// 스프라이트 시트 빌드
-// composedFrames의 Uint8Array를 직접 ImageData로 써서 canvas에 putImageData
-// =====================================================================
+// ── 스프라이트 시트 빌드 ─────────────────────────────────────────────────
 function buildSheet(frames) {
   const total = frames.length;
   if (!total) return null;
@@ -360,18 +211,14 @@ function buildSheet(frames) {
   for (let i = 0; i < total; i++) {
     const row = (rows === 2 && i >= cols) ? 1 : 0;
     const col = (rows === 2 && i >= cols) ? i - cols : i;
-    // Uint8Array → Uint8ClampedArray → ImageData (복사 없이 뷰로)
-    const clamped = new Uint8ClampedArray(frames[i].buffer, frames[i].byteOffset, frames[i].byteLength);
-    const imgData = new ImageData(clamped, gifW, gifH);
+    const imgData = new ImageData(frames[i], gifW, gifH);
     ctx.putImageData(imgData, col * gifW, row * gifH);
   }
 
-  return {
-    canvas, rows, cols,
+  return { canvas, rows, cols,
     topCount: rows === 2 ? cols : total,
     botCount: rows === 2 ? total - cols : 0,
-    total
-  };
+    total };
 }
 
 function buildRangeSheet(start, end) {
@@ -380,9 +227,7 @@ function buildRangeSheet(start, end) {
   return buildSheet(slice).canvas;
 }
 
-// =====================================================================
-// 다운로드
-// =====================================================================
+// ── 다운로드 ─────────────────────────────────────────────────────────────
 function downloadCanvas(canvas, filename) {
   return new Promise(res => {
     canvas.toBlob(blob => {
@@ -395,9 +240,7 @@ function downloadCanvas(canvas, filename) {
   });
 }
 
-// =====================================================================
-// UI
-// =====================================================================
+// ── UI ───────────────────────────────────────────────────────────────────
 function showError(msg) { const b = document.getElementById("errorBox"); b.textContent = msg; b.style.display = msg ? "block" : "none"; }
 function setExtractEnabled(v) { document.getElementById("extractBtn").disabled = !v; }
 
