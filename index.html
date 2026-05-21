@@ -37,20 +37,13 @@
   .info-box strong { color: #4f8ef7; }
   .range-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .range-tag { background: #fff; border: 1px solid #c7d7fd; border-radius: 6px; padding: 3px 10px; color: #3a5ccc; font-weight: 500; font-size: 12px; }
-  .settings-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-  .checker { background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 16px 16px; border-radius: 8px; padding: 8px; display: inline-block; }
-  .preview-img { max-width: 110px; max-height: 110px; display: block; image-rendering: pixelated; }
-  .scale-info { font-size: 13px; color: #555; display: block; margin-bottom: 6px; }
-  input[type=range] { width: 100%; accent-color: #4f8ef7; }
-  .range-labels { display: flex; justify-content: space-between; font-size: 11px; color: #bbb; }
   .stat-box { font-size: 12px; color: #888; background: #f8f9fa; border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
-  .stat-box div { margin-bottom: 2px; }
   .warn { color: #e67e22; margin-top: 4px; }
   .result-meta { font-size: 12px; color: #888; display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
   .result-meta strong { color: #111; }
-  .sheet-preview { overflow-x: auto; margin-bottom: 16px; border-radius: 8px; background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 20px 20px; padding: 8px; }
-  .sheet-preview img { max-width: 100%; display: block; }
-  /* Modal */
+  .sheet-preview { overflow-x: auto; margin-bottom: 16px; border-radius: 8px;
+    background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 20px 20px; padding: 8px; }
+  .sheet-preview img { max-width: 100%; display: block; image-rendering: pixelated; }
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
   .modal { background: #fff; border-radius: 16px; padding: 32px; width: 440px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
   .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
@@ -66,15 +59,15 @@
   .modal-btns { display: flex; gap: 10px; }
   .modal-btns .btn { flex: 1; padding: 11px; }
   .progress { font-size: 13px; color: #4f8ef7; margin-top: 10px; text-align: center; }
+  .checker { background: repeating-conic-gradient(#e5e7eb 0% 25%, #fff 0% 50%) 0 0 / 16px 16px; border-radius: 8px; padding: 8px; display: inline-block; }
+  .preview-img { max-width: 110px; max-height: 110px; display: block; image-rendering: pixelated; }
 </style>
 </head>
 <body>
-
 <div style="max-width:700px;margin:0 auto;">
   <h1>GIF → Sprite Sheet</h1>
-  <p class="sub">원본 색상 · 투명 배경 유지 · 16,384px 초과 시 2줄 자동 배치</p>
+  <p class="sub">원본 색상 완벽 보존 · 투명 배경 유지 · 16,384px 초과 시 2줄 자동 배치</p>
 
-  <!-- Upload -->
   <div class="drop-zone" id="dropZone">
     <input type="file" id="fileInput" accept=".gif" style="display:none" />
     <div class="icon">🎞️</div>
@@ -86,7 +79,6 @@
 
   <div class="error" id="errorBox" style="display:none"></div>
 
-  <!-- Mode + Extract -->
   <div class="card">
     <div class="mode-bar">
       <span>추출 모드</span>
@@ -98,27 +90,22 @@
     </div>
   </div>
 
-  <!-- Mode info -->
   <div class="info-box" id="modeInfo" style="display:none"></div>
 
-  <!-- Settings -->
-  <div class="card" id="settingsCard" style="display:none">
-    <div class="settings-row">
+  <!-- 파일 정보 -->
+  <div class="card" id="fileInfoCard" style="display:none">
+    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
       <div>
         <div class="label">미리보기</div>
         <div class="checker"><img id="previewImg" class="preview-img" /></div>
       </div>
-      <div style="flex:1;min-width:200px;">
-        <div class="label">스케일</div>
-        <span class="scale-info" id="scaleLabel">1× → 0×0px/프레임</span>
-        <input type="range" id="scaleRange" min="0.25" max="4" step="0.25" value="1" />
-        <div class="range-labels"><span>0.25×</span><span>4×</span></div>
+      <div style="flex:1;min-width:180px;">
+        <div class="label">파일 정보</div>
         <div class="stat-box" id="statBox"></div>
       </div>
     </div>
   </div>
 
-  <!-- Result -->
   <div class="card" id="resultCard" style="display:none">
     <div class="label">결과</div>
     <div class="result-meta" id="resultMeta"></div>
@@ -127,7 +114,7 @@
   </div>
 </div>
 
-<!-- Save Modal -->
+<!-- Modal -->
 <div class="modal-overlay" id="modalOverlay" style="display:none">
   <div class="modal">
     <h2>파일 저장</h2>
@@ -147,172 +134,215 @@
 </div>
 
 <script>
-// ── Constants ──────────────────────────────────────────────────────────────
-const SUFFIXES = ["01","02","03","f","c","b","d","e"];
+// ── 상수 ───────────────────────────────────────────────────────────────────
+const SUFFIXES   = ["01","02","03","f","c","b","d","e"];
 const RANGES_144 = [[1,10],[11,14],[15,24],[25,36],[37,66],[73,86],[91,108],[109,144]];
 const RANGES_296 = [[1,10],[11,26],[27,60],[61,84],[85,152],[159,184],[189,244],[245,296]];
+const MAX_W = 16384;
 
-// ── State ──────────────────────────────────────────────────────────────────
-let gifData = null;
-let composed = null;
+// ── 상태 ───────────────────────────────────────────────────────────────────
+let gifData     = null; // { w, h, frames }
+let composed    = null; // Uint8ClampedArray[] — 각 프레임 RGBA (길이 w*h*4)
 let currentFile = null;
-let scale = 1;
-let mode = "normal";
-let resultCanvas = null;
+let mode        = "normal";
+let resultCanvas= null;
 
-// ── GIF Parser ─────────────────────────────────────────────────────────────
+// ── GIF 파서 ───────────────────────────────────────────────────────────────
 function parseGIF(buffer) {
   const data = new Uint8Array(buffer);
   let pos = 0;
   const rb = () => data[pos++];
-  const rw = () => { const w = data[pos] | (data[pos+1]<<8); pos+=2; return w; };
+  const rw = () => { const v = data[pos]|(data[pos+1]<<8); pos+=2; return v; };
+
   pos = 6;
   const lw = rw(), lh = rw();
   const packed = rb();
-  const gctFlag = (packed>>7)&1, gctSize = packed&0x07;
-  rb(); rb();
+  const gctFlag = (packed>>7)&1, gctSize = packed&7;
+  rb(); rb(); // bg, aspect
   let gct = null;
-  if (gctFlag) { const n=1<<(gctSize+1); gct=new Uint8Array(data.buffer,pos,n*3); pos+=n*3; }
+  if (gctFlag) { const n=1<<(gctSize+1); gct=data.slice(pos, pos+n*3); pos+=n*3; }
+
   const frames = [];
-  let gce = { delay:100, transparentIndex:-1, disposal:0 };
+  let gce = { delay:100, ti:-1, disposal:0 };
+
   while (pos < data.length) {
-    const block = rb();
-    if (block===0x3B) break;
-    if (block===0x21) {
-      const label = rb();
-      if (label===0xF9) {
-        rb();
+    const b = rb();
+    if (b === 0x3B) break;
+    if (b === 0x21) {
+      const lbl = rb();
+      if (lbl === 0xF9) {
+        rb(); // block size
         const p = rb();
-        gce.disposal = (p>>3)&0x07;
-        gce.delay = (rw()*10)||100;
+        gce.disposal = (p>>3)&7;
+        gce.delay    = (rw()*10)||100;
         const ti = rb();
-        gce.transparentIndex = (p&1)?ti:-1;
-        rb();
+        gce.ti = (p&1) ? ti : -1;
+        rb(); // terminator
       } else { let s; while((s=rb())!==0) pos+=s; }
-    } else if (block===0x2C) {
+    } else if (b === 0x2C) {
       const fx=rw(),fy=rw(),fw=rw(),fh=rw();
       const ip=rb();
-      const lctFlag=(ip>>7)&1, interlace=(ip>>6)&1, lctSize=ip&0x07;
-      let ct=gct;
-      if (lctFlag) { const n=1<<(lctSize+1); ct=new Uint8Array(data.buffer,pos,n*3); pos+=n*3; }
-      const minCode=rb();
-      const chunks=[]; let size;
-      while((size=rb())!==0){ chunks.push(data.slice(pos,pos+size)); pos+=size; }
-      const compressed=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
-      let off=0; for(const c of chunks){compressed.set(c,off);off+=c.length;}
-      const pixels=lzwDecode(minCode,compressed);
-      const rgba=new Uint8ClampedArray(fw*fh*4);
-      for(let i=0;i<pixels.length;i++){
-        const idx=pixels[i];
-        if(idx===gce.transparentIndex){rgba[i*4+3]=0;}
-        else if(ct){rgba[i*4]=ct[idx*3];rgba[i*4+1]=ct[idx*3+1];rgba[i*4+2]=ct[idx*3+2];rgba[i*4+3]=255;}
+      const lctFlag=(ip>>7)&1, interlace=(ip>>6)&1, lctSize=ip&7;
+      let ct = gct;
+      if (lctFlag) { const n=1<<(lctSize+1); ct=data.slice(pos,pos+n*3); pos+=n*3; }
+
+      const minCode = rb();
+      const chunks=[]; let s;
+      while((s=rb())!==0){ chunks.push(data.slice(pos,pos+s)); pos+=s; }
+      const comp = new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+      let off=0; for(const c of chunks){comp.set(c,off);off+=c.length;}
+
+      const pixels = lzwDecode(minCode, comp);
+
+      // 인덱스 배열 → RGBA (색상 테이블에서 직접 읽기, 색변환 없음)
+      const rgba = new Uint8ClampedArray(fw*fh*4);
+      for (let i=0; i<pixels.length; i++) {
+        const idx = pixels[i];
+        if (idx === gce.ti) {
+          rgba[i*4]=0; rgba[i*4+1]=0; rgba[i*4+2]=0; rgba[i*4+3]=0;
+        } else if (ct) {
+          rgba[i*4]  =ct[idx*3];
+          rgba[i*4+1]=ct[idx*3+1];
+          rgba[i*4+2]=ct[idx*3+2];
+          rgba[i*4+3]=255;
+        }
       }
-      frames.push({x:fx,y:fy,w:fw,h:fh,rgba:interlace?deinterlace(rgba,fw,fh):rgba,delay:gce.delay,disposal:gce.disposal,transparentIndex:gce.transparentIndex});
-      gce={delay:100,transparentIndex:-1,disposal:0};
+
+      frames.push({
+        x:fx, y:fy, w:fw, h:fh,
+        rgba: interlace ? deinterlace(rgba,fw,fh) : rgba,
+        disposal: gce.disposal, ti: gce.ti
+      });
+      gce = {delay:100,ti:-1,disposal:0};
     }
   }
-  return {w:lw,h:lh,frames};
+  return {w:lw, h:lh, frames};
 }
 
 function deinterlace(rgba,w,h){
   const out=new Uint8ClampedArray(rgba.length);
-  const passes=[{start:0,step:8},{start:4,step:8},{start:2,step:4},{start:1,step:2}];
+  const passes=[{s:0,st:8},{s:4,st:8},{s:2,st:4},{s:1,st:2}];
   let src=0;
-  for(const p of passes) for(let y=p.start;y<h;y+=p.step) for(let x=0;x<w;x++){
-    const dst=(y*w+x)*4;
-    out[dst]=rgba[src*4];out[dst+1]=rgba[src*4+1];out[dst+2]=rgba[src*4+2];out[dst+3]=rgba[src*4+3];src++;
+  for(const p of passes) for(let y=p.s;y<h;y+=p.st) for(let x=0;x<w;x++){
+    const d=(y*w+x)*4;
+    out[d]=rgba[src*4]; out[d+1]=rgba[src*4+1]; out[d+2]=rgba[src*4+2]; out[d+3]=rgba[src*4+3]; src++;
   }
   return out;
 }
 
 function lzwDecode(minCode,data){
-  const clearCode=1<<minCode,eofCode=clearCode+1;
-  let codeSize=minCode+1,codeMask=(1<<codeSize)-1;
+  const cc=1<<minCode, eof=cc+1;
+  let codeSize=minCode+1, mask=(1<<codeSize)-1;
   const table=[];
-  const initTable=()=>{table.length=0;for(let i=0;i<clearCode;i++)table.push([i]);table.push([]);table.push([]);};
-  initTable();
-  const output=[];
-  let bitBuf=0,bitCount=0,dataPos=0;
-  const readCode=()=>{
-    while(bitCount<codeSize&&dataPos<data.length){bitBuf|=data[dataPos++]<<bitCount;bitCount+=8;}
-    const code=bitBuf&codeMask;bitBuf>>=codeSize;bitCount-=codeSize;return code;
+  const init=()=>{table.length=0;for(let i=0;i<cc;i++)table.push(new Uint8Array([i]));table.push(null);table.push(null);};
+  init();
+  const out=[];
+  let buf=0,bits=0,dp=0,prev=null;
+  const read=()=>{
+    while(bits<codeSize&&dp<data.length){buf|=data[dp++]<<bits;bits+=8;}
+    const c=buf&mask; buf>>=codeSize; bits-=codeSize; return c;
   };
-  let prev=null;
   while(true){
-    const code=readCode();
-    if(code===eofCode)break;
-    if(code===clearCode){initTable();codeSize=minCode+1;codeMask=(1<<codeSize)-1;prev=null;continue;}
+    const code=read();
+    if(code===eof) break;
+    if(code===cc){init();codeSize=minCode+1;mask=(1<<codeSize)-1;prev=null;continue;}
     let entry;
-    if(code<table.length)entry=table[code];
-    else if(prev!==null&&code===table.length)entry=[...prev,prev[0]];
+    if(code<table.length&&table[code]) entry=table[code];
+    else if(prev&&code===table.length) entry=new Uint8Array([...prev,prev[0]]);
     else break;
-    for(const p of entry)output.push(p);
-    if(prev!==null){
-      table.push([...prev,entry[0]]);
-      if(table.length===(1<<codeSize)+1&&codeSize<12){codeSize++;codeMask=(1<<codeSize)-1;}
+    for(const p of entry) out.push(p);
+    if(prev){
+      const ne=new Uint8Array([...prev,entry[0]]);
+      table.push(ne);
+      if(table.length===(1<<codeSize)+1&&codeSize<12){codeSize++;mask=(1<<codeSize)-1;}
     }
     prev=entry;
   }
-  return output;
+  return out;
 }
 
-// ── Frame Composition ──────────────────────────────────────────────────────
+// ── 프레임 합성 (픽셀 직접 복사, canvas/drawImage 미사용) ─────────────────
 function composeFrames(gd){
   const {w,h,frames}=gd;
   const result=[];
-  let prev=null;
+  // 누적 버퍼 (RGBA)
+  const buf = new Uint8ClampedArray(w*h*4); // 초기값 = 완전 투명
+
   for(const f of frames){
-    const c=document.createElement("canvas"); c.width=w; c.height=h;
-    const ctx=c.getContext("2d",{willReadFrequently:true});
-    if(prev&&f.disposal!==2) ctx.putImageData(prev,0,0);
-    const fc=document.createElement("canvas"); fc.width=f.w; fc.height=f.h;
-    fc.getContext("2d").putImageData(new ImageData(f.rgba,f.w,f.h),0,0);
-    ctx.drawImage(fc,f.x,f.y);
-    const id=ctx.getImageData(0,0,w,h);
-    result.push(id);
-    prev=f.disposal===2?null:id;
-  }
-  return result;
-}
+    // disposal=3 대비 이전 상태 저장
+    const saved = (f.disposal===3) ? buf.slice() : null;
 
-function drawScaled(ctx,imgData,sw,sh,dx,dy,dw,dh){
-  const t=document.createElement("canvas"); t.width=sw; t.height=sh;
-  t.getContext("2d").putImageData(imgData,0,0);
-  ctx.imageSmoothingEnabled=false;
-  ctx.drawImage(t,dx,dy,dw,dh);
-}
-
-// ── Sprite Sheet ───────────────────────────────────────────────────────────
-function buildSheet(frames, gw, gh, sc){
-  const fw=Math.round(gw*sc), fh=Math.round(gh*sc);
-  const total=frames.length;
-  const singleW=fw*total;
-  const canvas=document.createElement("canvas");
-  const ctx=canvas.getContext("2d");
-  if(singleW>16384){
-    const top=Math.ceil(total/2);
-    canvas.width=fw*top; canvas.height=fh*2;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    for(let i=0;i<total;i++){
-      const row=i<top?0:1, col=i<top?i:i-top;
-      drawScaled(ctx,frames[i],gw,gh,col*fw,row*fh,fw,fh);
+    // 프레임 패치를 버퍼에 픽셀 단위로 직접 복사
+    for(let row=0; row<f.h; row++){
+      for(let col=0; col<f.w; col++){
+        const si=(row*f.w+col)*4;
+        const di=((f.y+row)*w+(f.x+col))*4;
+        if(di<0||di+3>=buf.length) continue;
+        // 투명 픽셀은 건드리지 않음 (disposal에 따라 다름)
+        if(f.rgba[si+3]===0) continue;
+        buf[di]  =f.rgba[si];
+        buf[di+1]=f.rgba[si+1];
+        buf[di+2]=f.rgba[si+2];
+        buf[di+3]=f.rgba[si+3];
+      }
     }
-  } else {
-    canvas.width=fw*total; canvas.height=fh;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    for(let i=0;i<total;i++) drawScaled(ctx,frames[i],gw,gh,i*fw,0,fw,fh);
+
+    // 현재 합성 결과 스냅샷
+    result.push(buf.slice());
+
+    // disposal 처리
+    if(f.disposal===2){
+      // 패치 영역만 투명으로 초기화
+      for(let row=0;row<f.h;row++){
+        for(let col=0;col<f.w;col++){
+          const di=((f.y+row)*w+(f.x+col))*4;
+          if(di<0||di+3>=buf.length) continue;
+          buf[di]=0;buf[di+1]=0;buf[di+2]=0;buf[di+3]=0;
+        }
+      }
+    } else if(f.disposal===3 && saved){
+      buf.set(saved);
+    }
   }
-  return canvas;
+  return result; // Uint8ClampedArray[]
 }
 
-function buildRangeSheet(start,end){
-  const slice=composed.slice(start-1,end);
+// ── 스프라이트 시트 빌드 (putImageData만 사용) ────────────────────────────
+function buildSheet(frames, gw, gh){
+  const total = frames.length;
+  const singleW = gw * total;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  let cols, rows;
+  if(singleW > MAX_W){
+    rows=2; cols=Math.ceil(total/2);
+  } else {
+    rows=1; cols=total;
+  }
+  canvas.width  = gw * cols;
+  canvas.height = gh * rows;
+
+  // 완전 투명으로 초기화
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let i=0;i<total;i++){
+    const row = (rows===2 && i>=cols) ? 1 : 0;
+    const col = (rows===2 && i>=cols) ? i-cols : i;
+    const imgData = new ImageData(frames[i], gw, gh);
+    ctx.putImageData(imgData, col*gw, row*gh);
+  }
+  return {canvas, rows, cols, topCount: rows===2?cols:total, botCount: rows===2?total-cols:0, total};
+}
+
+function buildRangeSheet(start, end){
+  const slice = composed.slice(start-1, end);
   if(!slice.length) return null;
-  return buildSheet(slice,gifData.w,gifData.h,scale);
+  return buildSheet(slice, gifData.w, gifData.h).canvas;
 }
 
-// ── Download ───────────────────────────────────────────────────────────────
-function downloadCanvas(canvas,filename){
+// ── 다운로드 ───────────────────────────────────────────────────────────────
+function downloadCanvas(canvas, filename){
   return new Promise(res=>{
     canvas.toBlob(blob=>{
       const a=document.createElement("a");
@@ -326,7 +356,7 @@ function downloadCanvas(canvas,filename){
   });
 }
 
-// ── UI Helpers ─────────────────────────────────────────────────────────────
+// ── UI ─────────────────────────────────────────────────────────────────────
 function showError(msg){ const b=document.getElementById("errorBox"); b.textContent=msg; b.style.display=msg?"block":"none"; }
 function setExtractEnabled(v){ document.getElementById("extractBtn").disabled=!v; }
 
@@ -340,25 +370,25 @@ function updateModeInfo(){
 }
 
 function updateStats(){
-  if(!gifData)return;
-  const fw=Math.round(gifData.w*scale), fh=Math.round(gifData.h*scale);
-  document.getElementById("scaleLabel").textContent=`${scale}× → ${fw}×${fh}px/프레임`;
-  const totalW=fw*gifData.frames.length;
-  const warn=totalW>16384?`<div class="warn">⚠️ 16,384px 초과 → 2줄 자동 배치 (위 ${Math.ceil(gifData.frames.length/2)} / 아래 ${Math.floor(gifData.frames.length/2)}프레임)</div>`:"";
+  if(!gifData) return;
+  const totalW=gifData.w*gifData.frames.length;
+  const warn=totalW>MAX_W
+    ?`<div class="warn">⚠️ 16,384px 초과 → 2줄 자동 배치<br>(위 ${Math.ceil(gifData.frames.length/2)}프레임 / 아래 ${Math.floor(gifData.frames.length/2)}프레임)</div>`:"";
   document.getElementById("statBox").innerHTML=`
     <div>총 프레임: <strong>${gifData.frames.length}</strong></div>
-    ${mode==="normal"?`<div>예상 시트 너비: <strong style="color:${totalW>16384?"#e67e22":"#111"}">${totalW.toLocaleString()}px</strong></div>${warn}`:""}
+    <div>프레임 크기: <strong>${gifData.w}×${gifData.h}px</strong></div>
+    ${mode==="normal"?`<div>예상 시트 너비: <strong style="color:${totalW>MAX_W?"#e67e22":"#111"}">${totalW.toLocaleString()}px</strong></div>${warn}`:""}
   `;
 }
 
 function updateFileTagList(name){
   const ranges=mode==="144"?RANGES_144:RANGES_296;
   document.getElementById("fileTagList").innerHTML=ranges.map((r,i)=>
-    `<span class="file-tag">${name||"파일명"}_${SUFFIXES[i]}.png <span>(${r[0]}~${r[1]})</span></span>`
+    `<span class="file-tag">${name||"파일명"}${SUFFIXES[i]}.png <span>(${r[0]}~${r[1]})</span></span>`
   ).join("");
 }
 
-// ── File Load ──────────────────────────────────────────────────────────────
+// ── 파일 로드 ──────────────────────────────────────────────────────────────
 function loadFile(file){
   if(!file||!file.name.toLowerCase().endsWith(".gif")){showError("GIF 파일만 업로드할 수 있습니다.");return;}
   showError("");
@@ -370,13 +400,12 @@ function loadFile(file){
   reader.onload=e=>{
     try{
       const parsed=parseGIF(e.target.result);
-      if(!parsed.frames.length)throw new Error("프레임을 찾을 수 없습니다.");
+      if(!parsed.frames.length) throw new Error("프레임을 찾을 수 없습니다.");
       gifData=parsed;
       composed=composeFrames(parsed);
       document.getElementById("dropText").innerHTML=`<div class="file-name">${file.name}</div><div class="file-info">${parsed.frames.length}프레임 · ${parsed.w}×${parsed.h}px</div>`;
-      const img=document.getElementById("previewImg");
-      img.src=URL.createObjectURL(file);
-      document.getElementById("settingsCard").style.display="block";
+      document.getElementById("previewImg").src=URL.createObjectURL(file);
+      document.getElementById("fileInfoCard").style.display="block";
       updateStats();
       setExtractEnabled(true);
     }catch(err){showError("GIF 파싱 실패: "+err.message);}
@@ -384,29 +413,24 @@ function loadFile(file){
   reader.readAsArrayBuffer(file);
 }
 
-// ── Extract ────────────────────────────────────────────────────────────────
+// ── 추출 ───────────────────────────────────────────────────────────────────
 function handleExtract(){
-  if(!gifData||!composed)return;
+  if(!gifData||!composed) return;
   showError("");
   if(mode==="normal"){
     document.getElementById("extractBtn").textContent="처리 중...";
     setExtractEnabled(false);
     setTimeout(()=>{
       try{
-        const allFrames=composed;
-        const canvas=buildSheet(allFrames,gifData.w,gifData.h,scale);
-        resultCanvas=canvas;
-        const fw=Math.round(gifData.w*scale);
-        const rows=canvas.height>Math.round(gifData.h*scale)?2:1;
-        const top=Math.ceil(gifData.frames.length/2);
+        const r=buildSheet(composed, gifData.w, gifData.h);
+        resultCanvas=r.canvas;
         document.getElementById("resultMeta").innerHTML=`
-          <span>크기: <strong>${canvas.width}×${canvas.height}px</strong></span>
-          <span>줄 수: <strong>${rows}줄</strong></span>
-          ${rows===2?`<span>위 ${top} / 아래 ${gifData.frames.length-top}프레임</span>`:""}
-          <span>총 ${gifData.frames.length}프레임</span>
+          <span>크기: <strong>${r.canvas.width}×${r.canvas.height}px</strong></span>
+          <span>줄 수: <strong>${r.rows}줄</strong></span>
+          ${r.rows===2?`<span>위 ${r.topCount} / 아래 ${r.botCount}프레임</span>`:""}
+          <span>총 ${r.total}프레임</span>
         `;
-        document.getElementById("resultImg").src=canvas.toDataURL("image/png");
-        document.getElementById("resultImg").style.imageRendering=fw<32?"pixelated":"auto";
+        document.getElementById("resultImg").src=r.canvas.toDataURL("image/png");
         document.getElementById("resultCard").style.display="block";
       }catch(err){showError("생성 실패: "+err.message);}
       finally{document.getElementById("extractBtn").textContent="추출하기";setExtractEnabled(true);}
@@ -416,35 +440,35 @@ function handleExtract(){
     document.getElementById("saveNameInput").value=baseName;
     document.getElementById("modalDesc").textContent=`${mode}프레임 모드 — ${SUFFIXES.length}개 PNG가 순서대로 저장됩니다.`;
     updateFileTagList(baseName);
-    document.getElementById("modalOverlay").style.display="flex";
     document.getElementById("progressText").style.display="none";
     document.getElementById("confirmBtn").disabled=false;
+    document.getElementById("modalOverlay").style.display="flex";
   }
 }
 
-// ── Modal Save ─────────────────────────────────────────────────────────────
+// ── 모달 저장 ──────────────────────────────────────────────────────────────
 async function handleSaveConfirm(){
   const name=document.getElementById("saveNameInput").value.trim();
-  if(!name)return;
+  if(!name) return;
   const ranges=mode==="144"?RANGES_144:RANGES_296;
   document.getElementById("confirmBtn").disabled=true;
   document.getElementById("progressText").style.display="block";
   try{
     for(let i=0;i<ranges.length;i++){
-      document.getElementById("progressText").textContent=`저장 중... (${i+1}/${ranges.length}) ${name}_${SUFFIXES[i]}.png`;
+      document.getElementById("progressText").textContent=`저장 중... (${i+1}/${ranges.length}) ${name}${SUFFIXES[i]}.png`;
       const canvas=buildRangeSheet(ranges[i][0],ranges[i][1]);
-      if(!canvas)continue;
-      await downloadCanvas(canvas,`${name}_${SUFFIXES[i]}.png`);
+      if(!canvas) continue;
+      await downloadCanvas(canvas,`${name}${SUFFIXES[i]}.png`);
     }
     document.getElementById("progressText").textContent="✅ 저장 완료!";
-    setTimeout(()=>document.getElementById("modalOverlay").style.display="none",1000);
+    setTimeout(()=>document.getElementById("modalOverlay").style.display="none",1200);
   }catch(err){
     showError("저장 실패: "+err.message);
     document.getElementById("modalOverlay").style.display="none";
   }finally{document.getElementById("confirmBtn").disabled=false;}
 }
 
-// ── Event Listeners ────────────────────────────────────────────────────────
+// ── 이벤트 ─────────────────────────────────────────────────────────────────
 const dropZone=document.getElementById("dropZone");
 dropZone.addEventListener("click",()=>document.getElementById("fileInput").click());
 dropZone.addEventListener("dragover",e=>{e.preventDefault();dropZone.classList.add("drag");});
@@ -463,30 +487,16 @@ document.querySelectorAll("input[name=mode]").forEach(r=>{
   });
 });
 
-document.getElementById("scaleRange").addEventListener("input",e=>{
-  scale=Number(e.target.value);
-  updateStats();
-});
-
 document.getElementById("extractBtn").addEventListener("click",handleExtract);
-
 document.getElementById("downloadBtn").addEventListener("click",()=>{
-  if(!resultCanvas)return;
-  downloadCanvas(resultCanvas,(currentFile?.name.replace(".gif","")||"sprite")+"_sheet.png");
+  if(!resultCanvas) return;
+  downloadCanvas(resultCanvas,(currentFile?.name.replace(".gif","")||"sprite")+"sheet.png");
 });
-
 document.getElementById("cancelBtn").addEventListener("click",()=>{
   document.getElementById("modalOverlay").style.display="none";
 });
-
-document.getElementById("saveNameInput").addEventListener("input",e=>{
-  updateFileTagList(e.target.value.trim());
-});
-
-document.getElementById("saveNameInput").addEventListener("keydown",e=>{
-  if(e.key==="Enter") handleSaveConfirm();
-});
-
+document.getElementById("saveNameInput").addEventListener("input",e=>updateFileTagList(e.target.value.trim()));
+document.getElementById("saveNameInput").addEventListener("keydown",e=>{if(e.key==="Enter")handleSaveConfirm();});
 document.getElementById("confirmBtn").addEventListener("click",handleSaveConfirm);
 </script>
 </body>
