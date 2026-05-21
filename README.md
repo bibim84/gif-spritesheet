@@ -1,4 +1,4 @@
-# gif-spritesheet<br>
+# gif-spritesheet사용안함./파이썬 제작<br>
 <strong>스프라이트 자동 저장해주는 앱</strong><br>
 26/05/21<br>
 시트 자동생성 및 자동 저장 앱.<br>
