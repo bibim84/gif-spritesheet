@@ -1,5 +1,5 @@
 # gif-spritesheet<br>
-<strong>스프라이트 자동 저장해주는 앱<strong> <br>
+<strong>스프라이트 자동 저장해주는 앱</strong><br>
 26/05/21<br>
 시트 자동생성 및 자동 저장 앱.<br>
 gif 파일을 만들어 추출하면 스프라이트 시트로 자동 저장합니다.<br>
